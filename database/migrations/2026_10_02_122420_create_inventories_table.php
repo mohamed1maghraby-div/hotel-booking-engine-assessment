@@ -13,7 +13,18 @@ return new class extends Migration
     {
         Schema::create('inventories', function (Blueprint $table) {
             $table->id();
+
+            $table->foreignId('room_type_id')->constrained('room_types')->cascadeOnDelete();
+
+            $table->date('date');
+
+            $table->unsignedSmallInteger('total_rooms');
+            $table->unsignedSmallInteger('booked_rooms')->default(0);
+
             $table->timestamps();
+
+            $table->unique(['room_type_id', 'date']);
+            $table->index(['room_type_id', 'date']);
         });
     }
 

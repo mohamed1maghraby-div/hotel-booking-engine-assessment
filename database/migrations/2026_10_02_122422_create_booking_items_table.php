@@ -13,7 +13,18 @@ return new class extends Migration
     {
         Schema::create('booking_items', function (Blueprint $table) {
             $table->id();
+
+            $table->foreignId('booking_id')->constrained('bookings')->cascadeOnDelete();
+            $table->foreignId('room_type_id')->constrained('room_types')->restrictOnDelete();
+
+            $table->unsignedSmallInteger('quantity');
+
+            $table->decimal('price_per_night', 12, 2);
+            $table->decimal('total_price', 12, 2);
+
             $table->timestamps();
+
+            $table->index(['booking_id', 'room_type_id']);
         });
     }
 

@@ -1,58 +1,534 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Hotel Booking Engine
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A Laravel-based hotel booking API focused on reliable room inventory management, concurrency-safe reservations, idempotent booking requests, and safe cancellation.
 
-## About Laravel
+## Features
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+* Hotel and room type management
+* Date-based room inventory
+* Authenticated booking API using Laravel Sanctum
+* Unique booking numbers
+* Multi-night booking support
+* Transactional inventory reservation
+* Concurrency-safe inventory locking
+* Protection against room overbooking
+* `Idempotency-Key` support
+* Safe repeated requests
+* Safe booking cancellation
+* Inventory restoration on cancellation
+* User-level booking authorization
+* Request validation
+* Automated feature tests
+* Process-level concurrency test
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+---
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Requirements
 
-## Learning Laravel
+* PHP 8.3+
+* Composer
+* MySQL 8+
+* Laravel
+* Laragon / XAMPP / equivalent local PHP environment
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+---
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Installation
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+Clone the project and install dependencies:
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+composer install
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+Create the environment file:
 
-## Contributing
+```bash
+copy .env.example .env
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Generate the application key:
 
-## Code of Conduct
+```bash
+php artisan key:generate
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Configure the database in `.env`:
 
-## Security Vulnerabilities
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=hotel_booking_engine
+DB_USERNAME=root
+DB_PASSWORD=
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Run migrations:
 
-## License
+```bash
+php artisan migrate
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Seed the assessment data:
+
+```bash
+php artisan db:seed --class=AssessmentSeeder
+```
+
+Start the application:
+
+```bash
+php artisan serve
+```
+
+The API will be available at:
+
+```text
+http://127.0.0.1:8000
+```
+
+---
+
+# Authentication
+
+The API uses Laravel Sanctum.
+
+Create an authenticated user and token, then send the token with every protected request:
+
+```http
+Authorization: Bearer YOUR_TOKEN
+Accept: application/json
+Content-Type: application/json
+```
+
+---
+
+# Booking API
+
+## Create Booking
+
+```http
+POST /api/v1/bookings
+```
+
+### Headers
+
+```http
+Authorization: Bearer YOUR_TOKEN
+Accept: application/json
+Content-Type: application/json
+Idempotency-Key: unique-request-key
+```
+
+`Idempotency-Key` is required to prevent accidental duplicate bookings when the same request is retried.
+
+### Request
+
+```json
+{
+    "hotel_id": 1,
+    "room_type_id": 1,
+    "check_in": "2026-10-04",
+    "check_out": "2026-10-07",
+    "quantity": 2
+}
+```
+
+### Successful Response
+
+```json
+{
+    "success": true,
+    "message": "Booking created successfully.",
+    "data": {
+        "id": 1,
+        "booking_number": "BK-...",
+        "status": "CONFIRMED",
+        "hotel_id": 1,
+        "check_in": "2026-10-04T00:00:00.000000Z",
+        "check_out": "2026-10-07T00:00:00.000000Z",
+        "rooms_count": 2,
+        "total_amount": "9000.00",
+        "currency": "EGP"
+    }
+}
+```
+
+The total amount is calculated as:
+
+```text
+price_per_night × quantity × number_of_nights
+```
+
+---
+
+# Idempotency
+
+The booking endpoint requires an `Idempotency-Key`.
+
+For example:
+
+```http
+Idempotency-Key: order-12345
+```
+
+## Same key + same request
+
+The original booking is returned/replayed and a duplicate booking is not created.
+
+## Same key + different request
+
+The API rejects the request:
+
+```json
+{
+    "message": "This key was already used with a different request.",
+    "errors": {
+        "idempotency_key": [
+            "This key was already used with a different request."
+        ]
+    }
+}
+```
+
+The idempotency key is scoped to the authenticated user.
+
+---
+
+# Cancellation API
+
+## Cancel Booking
+
+```http
+POST /api/v1/bookings/{booking}/cancel
+```
+
+### Headers
+
+```http
+Authorization: Bearer YOUR_TOKEN
+Accept: application/json
+```
+
+Cancellation:
+
+1. Locks the booking row.
+2. Verifies that the booking belongs to the authenticated user.
+3. Verifies the booking status.
+4. Restores the reserved inventory.
+5. Changes the booking status to `CANCELLED`.
+6. Records `cancelled_at`.
+
+Repeated cancellation does not restore the inventory more than once.
+
+---
+
+# Inventory Management
+
+Inventory is stored per room type and per night.
+
+For a booking from:
+
+```text
+2026-10-10
+```
+
+to:
+
+```text
+2026-10-13
+```
+
+three inventory records are required:
+
+```text
+2026-10-10
+2026-10-11
+2026-10-12
+```
+
+The checkout date is excluded from the number of nights.
+
+Before reservation, all required inventory rows are locked using:
+
+```php
+->lockForUpdate()
+```
+
+The service then verifies availability before incrementing `booked_rooms`.
+
+This prevents concurrent requests from reserving the same remaining rooms.
+
+---
+
+# Concurrency Protection
+
+The application uses database transactions and row-level locking to protect inventory from concurrent bookings.
+
+The assessment includes a process-level concurrency test that starts five independent PHP processes attempting to reserve:
+
+```text
+5 available rooms
+2 rooms per request
+```
+
+Expected result:
+
+```text
+2 successful bookings
+3 rejected requests
+```
+
+The successful requests reserve:
+
+```text
+2 × 2 = 4 rooms
+```
+
+leaving one room unavailable for another request requiring two rooms.
+
+The test also verifies that all requested nights have the correct `booked_rooms` value.
+
+---
+
+# Database Design
+
+Main tables:
+
+```text
+hotels
+room_types
+inventories
+bookings
+booking_items
+idempotency_keys
+users
+personal_access_tokens
+```
+
+Important constraints include:
+
+* Unique hotel code
+* Unique room type code per hotel
+* Unique inventory record per room type/date
+* Unique booking number
+* Foreign key constraints
+* Cascading booking item deletion
+* User-scoped idempotency keys
+
+---
+
+# Testing
+
+The project uses Pest.
+
+Run the complete test suite:
+
+```bash
+php artisan test
+```
+
+Current test suite covers:
+
+* Concurrent booking protection
+* Overbooking prevention
+* User booking authorization
+* Booking validation
+* Idempotent booking requests
+* Laravel application bootstrapping
+
+Current result:
+
+```text
+Tests:    6 passed (32 assertions)
+```
+
+---
+
+# Concurrency Test Environment
+
+The process-level concurrency test uses a dedicated MySQL testing database.
+
+Create the database:
+
+```sql
+CREATE DATABASE hotel_booking_engine_assessment_test;
+```
+
+Configure `.env.testing`:
+
+```env
+APP_ENV=testing
+APP_DEBUG=true
+APP_URL=http://localhost:8000
+
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=hotel_booking_engine_assessment_test
+DB_USERNAME=root
+DB_PASSWORD=
+
+CACHE_STORE=array
+SESSION_DRIVER=array
+QUEUE_CONNECTION=sync
+```
+
+Generate the testing application key if required:
+
+```bash
+php artisan key:generate --env=testing
+```
+
+The concurrency test requires a running Laravel testing server.
+
+Example:
+
+```bash
+php artisan serve --env=testing --port=8001
+```
+
+The test workers then send independent HTTP requests to the testing application.
+
+---
+
+# Assessment Seeder
+
+The project contains a single assessment seeder:
+
+```text
+database/seeders/AssessmentSeeder.php
+```
+
+It creates:
+
+* Assessment test hotel
+* Assessment test room type
+* Three nights of inventory
+* Five total rooms per night
+
+Run it with:
+
+```bash
+php artisan db:seed --class=AssessmentSeeder
+```
+
+---
+
+# API Error Handling
+
+Common responses include:
+
+### Validation Error
+
+```text
+422 Unprocessable Entity
+```
+
+### Insufficient Inventory
+
+```text
+422 Unprocessable Entity
+```
+
+Example:
+
+```json
+{
+    "message": "Insufficient available for 2026-10-10.",
+    "errors": {
+        "rooms": [
+            "Insufficient available for 2026-10-10."
+        ]
+    }
+}
+```
+
+### Unauthenticated
+
+```text
+401 Unauthorized
+```
+
+### Unauthorized Booking Access
+
+A user cannot cancel another user's booking.
+
+---
+
+# Project Structure
+
+Relevant application components:
+
+```text
+app/
+├── Http/
+│   └── Controllers/
+├── Models/
+└── Services/
+    └── InventoryService.php
+    └── BookingService.php
+
+database/
+├── migrations/
+└── seeders/
+    └── AssessmentSeeder.php
+
+tests/
+├── Feature/
+│   ├── AssessmentTest.php
+│   └── ExampleTest.php
+├── Support/
+│   └── BookingConcurrencyWorker.php
+└── Unit/
+    └── ExampleTest.php
+```
+
+---
+
+# Design Decisions
+
+### Database Transactions
+
+Booking creation and inventory reservation are performed inside a database transaction so that a failure during booking creation does not leave partially reserved inventory.
+
+### Row-Level Locking
+
+Inventory rows are locked with `lockForUpdate()` before availability is checked and updated.
+
+### Idempotency
+
+Idempotency records associate a request key with a request hash and resulting booking. This prevents duplicate bookings caused by client retries.
+
+### Unique Booking Numbers
+
+Each booking receives a unique booking number backed by a database unique constraint.
+
+### Cancellation Safety
+
+Cancellation locks the booking row before checking its current status. This prevents two concurrent cancellation requests from restoring the same inventory twice.
+
+---
+
+# Running the Application
+
+```bash
+composer install
+php artisan migrate
+php artisan db:seed --class=AssessmentSeeder
+php artisan serve
+```
+
+Then authenticate and use:
+
+```text
+POST /api/v1/bookings
+POST /api/v1/bookings/{booking}/cancel
+```
+
+---
+
+# License
+
+This project is developed as part of a Laravel hotel booking engine technical assessment.

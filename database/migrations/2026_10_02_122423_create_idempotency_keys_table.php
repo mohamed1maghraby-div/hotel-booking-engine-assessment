@@ -13,7 +13,18 @@ return new class extends Migration
     {
         Schema::create('idempotency_keys', function (Blueprint $table) {
             $table->id();
+
+            $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
+
+            $table->string('key', 100);
+            $table->char('request_hash', 64);
+
+            $table->foreignId('booking_id')->nullable()->constrained('bookings')->nullOnDelete();
+
             $table->timestamps();
+
+            $table->unique(['user_id', 'key']);
+            $table->index('booking_id');
         });
     }
 
